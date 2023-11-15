@@ -1,0 +1,16 @@
+.{
+    .name = "AntleneWindowSystem",
+    .version = "0.1.0",
+    .paths = .{
+        "src/",
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+    },
+    .dependencies = .{
+        .zigwin32 = .{
+            .url = "https://github.com/QuentinTessier/zigwin32/archive/refs/tags/Prod.tar.gz",
+            .hash = "1220f8d5028adceac0c6fc8ef554d82efef49ca48913393e9c2f5d73a66b58c8aaad",
+        },
+    },
+}
