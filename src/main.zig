@@ -7,11 +7,11 @@ pub const Platform = enum {
     X11,
 };
 
-pub fn PlatfromWindow() type {
+pub fn PlatfromWindow(comptime UserDataType: type) type {
     switch (builtin.os.tag) {
         .windows => {
             const Win32Window = @import("Platform/win32.zig").Window;
-            return Win32Window;
+            return Win32Window(UserDataType);
         },
         else => {
             @panic("Lib only supports Windows right now");
@@ -19,9 +19,26 @@ pub fn PlatfromWindow() type {
     }
 }
 
-const Window = PlatfromWindow();
+const Window = PlatfromWindow(Application);
+
+const Application = struct {
+    run: bool = true,
+
+    pub fn onCloseEvent(_: *Window, self: ?*Application) void {
+        if (self) |app| {
+            app.run = false;
+        }
+    }
+};
 
 pub fn main() anyerror!void {
-    var window = Window.init("test", 1, 1);
+    var app: Application = .{};
+    var window = Window.init("test", 1000, 1000);
     window.create();
+
+    window.userdata = &app;
+
+    while (app.run) {
+        window.pollEvents();
+    }
 }
