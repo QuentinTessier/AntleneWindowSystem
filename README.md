@@ -1,6 +1,8 @@
 # AntleneWindowSystem
 Antlene Window lib
 
+This library is used in my personnal project Antlene (a simple 2D game engine made in Zig).
+
 ```Zig
 
 const AntleneWindowSystem = @import("AntleneWindowSystem");

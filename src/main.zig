@@ -1,12 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const Platform = enum {
-    Windows,
-    Wayland,
-    X11,
-};
-
 pub fn PlatfromWindow(comptime UserDataType: type) type {
     switch (builtin.os.tag) {
         .windows => {
