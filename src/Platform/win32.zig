@@ -79,20 +79,20 @@ pub fn Window(comptime UserDataType: type) type {
         dc: win32.HDC = undefined,
 
         // Callbacks
-        userdata: ?*UserDataType = null,
+        userdata: *UserDataType,
 
-        closeCallback: ?*const fn (*Self, ?*UserDataType) void = if (@hasDecl(UserDataType, "onCloseEvent")) &UserDataType.onCloseEvent else null,
-        keyCallback: ?*const fn (*Self, ?*UserDataType, Events.KeyEvent) void = if (@hasDecl(UserDataType, "onKeyEvent")) &UserDataType.onKeyEvent else null,
+        closeCallback: ?*const fn (*UserDataType, *Self) void = if (@hasDecl(UserDataType, "onCloseEvent")) &UserDataType.onCloseEvent else null,
+        keyCallback: ?*const fn (*UserDataType, *Self, Events.KeyEvent) void = if (@hasDecl(UserDataType, "onKeyEvent")) &UserDataType.onKeyEvent else null,
 
-        mouseButtonCallback: ?*const fn (*Self, ?*UserDataType, Events.MouseButtonEvent) void = if (@hasDecl(UserDataType, "onMouseButtonEvent")) &UserDataType.onMouseButtonEvent else null,
-        mouseScrollCallback: ?*const fn (*Self, ?*UserDataType, Events.MouseScrollEvent) void = if (@hasDecl(UserDataType, "onMouseScrollEvent")) &UserDataType.onMouseScrollEvent else null,
-        mouseMovedCallback: ?*const fn (*Self, ?*UserDataType, Events.MouseMovedEvent) void = if (@hasDecl(UserDataType, "onMouseMovedEvent")) &UserDataType.onMouseMovedEvent else null,
+        mouseButtonCallback: ?*const fn (*UserDataType, *Self, Events.MouseButtonEvent) void = if (@hasDecl(UserDataType, "onMouseButtonEvent")) &UserDataType.onMouseButtonEvent else null,
+        mouseScrollCallback: ?*const fn (*UserDataType, *Self, Events.MouseScrollEvent) void = if (@hasDecl(UserDataType, "onMouseScrollEvent")) &UserDataType.onMouseScrollEvent else null,
+        mouseMovedCallback: ?*const fn (*UserDataType, *Self, Events.MouseMovedEvent) void = if (@hasDecl(UserDataType, "onMouseMovedEvent")) &UserDataType.onMouseMovedEvent else null,
 
-        moveCallback: ?*const fn (*Self, ?*UserDataType, Events.MovedEvent) void = if (@hasDecl(UserDataType, "onWindowMoveEvent")) &UserDataType.onWindowMoveEvent else null,
-        resizeCallback: ?*const fn (*Self, ?*UserDataType, Events.ResizeEvent) void = if (@hasDecl(UserDataType, "onWindowResizeEvent")) &UserDataType.onWindowResizeEvent else null,
-        focusCallback: ?*const fn (*Self, ?*UserDataType, Events.FocusEvent) void = if (@hasDecl(UserDataType, "onWindowFocusEvent")) &UserDataType.onWindowFocusEvent else null,
+        moveCallback: ?*const fn (*UserDataType, *Self, Events.MovedEvent) void = if (@hasDecl(UserDataType, "onWindowMoveEvent")) &UserDataType.onWindowMoveEvent else null,
+        resizeCallback: ?*const fn (*UserDataType, *Self, Events.ResizeEvent) void = if (@hasDecl(UserDataType, "onWindowResizeEvent")) &UserDataType.onWindowResizeEvent else null,
+        focusCallback: ?*const fn (*UserDataType, *Self, Events.FocusEvent) void = if (@hasDecl(UserDataType, "onWindowFocusEvent")) &UserDataType.onWindowFocusEvent else null,
 
-        pub fn init(name: [*:0]const u8, width: i32, height: i32) Self {
+        pub fn init(name: [*:0]const u8, width: i32, height: i32, userdata: *UserDataType) Self {
             return .{
                 .name = name,
                 .extent = .{
@@ -101,6 +101,7 @@ pub fn Window(comptime UserDataType: type) type {
                     .width = width,
                     .height = height,
                 },
+                .userdata = userdata,
             };
         }
 
@@ -150,77 +151,77 @@ pub fn Window(comptime UserDataType: type) type {
             switch (msg.message) {
                 win32.WM_QUIT => {
                     if (self.closeCallback) |callback| {
-                        callback(self, self.userdata);
+                        callback(self.userdata, self);
                     }
                     return;
                 },
                 win32.WM_MOUSEMOVE => {
                     if (self.mouseMovedCallback) |callback| {
-                        callback(self, self.userdata, .{ .x = @intCast(mX), .y = @intCast(mY) });
+                        callback(self.userdata, self, .{ .x = @intCast(mX), .y = @intCast(mY) });
                     }
                     return;
                 },
                 win32.WM_LBUTTONDOWN => {
                     if (self.mouseButtonCallback) |callback| {
-                        callback(self, self.userdata, .{ .pressed = .Left });
+                        callback(self.userdata, self, .{ .pressed = .Left });
                     }
                     return;
                 },
                 win32.WM_MBUTTONDOWN => {
                     if (self.mouseButtonCallback) |callback| {
-                        callback(self, self.userdata, .{ .pressed = .Middle });
+                        callback(self.userdata, self, .{ .pressed = .Middle });
                     }
                     return;
                 },
                 win32.WM_RBUTTONDOWN => {
                     if (self.mouseButtonCallback) |callback| {
-                        callback(self, self.userdata, .{ .pressed = .Right });
+                        callback(self.userdata, self, .{ .pressed = .Right });
                     }
                     return;
                 },
                 win32.WM_LBUTTONUP => {
                     if (self.mouseButtonCallback) |callback| {
-                        callback(self, self.userdata, .{ .released = .Left });
+                        callback(self.userdata, self, .{ .released = .Left });
                     }
                     return;
                 },
                 win32.WM_MBUTTONUP => {
                     if (self.mouseButtonCallback) |callback| {
-                        callback(self, self.userdata, .{ .released = .Middle });
+                        callback(self.userdata, self, .{ .released = .Middle });
                     }
                     return;
                 },
                 win32.WM_RBUTTONUP => {
                     if (self.mouseButtonCallback) |callback| {
-                        callback(self, self.userdata, .{ .released = .Right });
+                        callback(self.userdata, self, .{ .released = .Right });
                     }
                     return;
                 },
                 win32.WM_MOUSEWHEEL => {
                     const value = hiWord(@intCast(msg.wParam));
                     if (self.mouseScrollCallback) |callback| {
-                        callback(self, self.userdata, .{ .amount = @floatFromInt(value) });
+                        callback(self.userdata, self, .{ .amount = @floatFromInt(value) });
                     }
                     return;
                 },
                 win32.WM_KEYDOWN => {
                     if (self.keyCallback) |callback| {
                         const keycode = @as(Events.KeyCode, @enumFromInt(WIN32_TO_HID[@as(usize, msg.wParam)]));
-                        callback(self, self.userdata, .{ .pressed = keycode });
+                        callback(self.userdata, self, .{ .pressed = keycode });
                     }
                     return;
                 },
                 win32.WM_KEYUP => {
                     if (self.keyCallback) |callback| {
                         const keycode = @as(Events.KeyCode, @enumFromInt(WIN32_TO_HID[@as(usize, msg.wParam)]));
-                        callback(self, self.userdata, .{ .released = keycode });
+                        callback(self.userdata, self, .{ .released = keycode });
                     }
                     return;
                 },
                 WM_ACTIVE => {
                     self.hasFocus = msg.wParam != 0x0006;
                     if (self.focusCallback) |callback| {
-                        callback(self, self.userdata, .{ .hasFocus = self.hasFocus });
+                        callback(self.userdata, self, .{ .hasFocus = self.hasFocus });
                     }
                     return;
                 },
@@ -236,7 +237,7 @@ pub fn Window(comptime UserDataType: type) type {
                         const w = rect.right - rect.left;
                         const h = rect.bottom - rect.top;
                         if (self.resizeCallback) |callback| {
-                            callback(self, self.userdata, .{
+                            callback(self.userdata, self, .{
                                 .old = .{ .width = self.extent.width, .height = self.extent.height },
                                 .new = .{ .width = @intCast(w), .height = @intCast(h) },
                             });
@@ -250,7 +251,7 @@ pub fn Window(comptime UserDataType: type) type {
                         const x = rect.left;
                         const y = rect.top;
                         if (self.moveCallback) |callback| {
-                            callback(self, self.userdata, .{
+                            callback(self.userdata, self, .{
                                 .old = .{ .x = self.extent.x, .y = self.extent.y },
                                 .new = .{ .x = x, .y = y },
                             });
