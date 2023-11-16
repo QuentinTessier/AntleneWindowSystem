@@ -18,25 +18,3 @@ pub fn PlatfromWindow(comptime UserDataType: type) type {
         },
     }
 }
-
-const Window = PlatfromWindow(Application);
-
-const Application = struct {
-    run: bool = true,
-
-    pub fn onCloseEvent(self: *Application, _: *Window) void {
-        self.run = false;
-    }
-};
-
-pub fn main() anyerror!void {
-    var app: Application = .{};
-    var window = Window.init("test", 1000, 1000, &app);
-    window.create();
-
-    window.userdata = &app;
-
-    while (app.run) {
-        window.pollEvents();
-    }
-}
