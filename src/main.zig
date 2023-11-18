@@ -1,6 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+pub const Events = @import("Event.zig");
+
 pub fn PlatfromWindow(comptime UserDataType: type) type {
     switch (builtin.os.tag) {
         .windows => {
