@@ -276,5 +276,9 @@ pub fn Window(comptime UserDataType: type) type {
                 _ = win32.DispatchMessageA(&msg);
             }
         }
+
+        pub fn getProcAddr() *const fn (?[*:0]const u8) callconv(WinApi) ?win32.PROC {
+            return win32.wglGetProcAddress;
+        }
     };
 }
