@@ -3,6 +3,7 @@ const win32 = @import("zigwin32").everything;
 const WinApi = std.os.windows.WINAPI;
 
 const Events = @import("../Event.zig");
+const Extent = @import("../Extent.zig");
 
 const WM_RESHAPE = win32.WM_USER + 0;
 const WM_ACTIVE = win32.WM_USER + 1;
@@ -16,6 +17,17 @@ pub fn hiWord(x: isize) i16 {
     @setRuntimeSafety(false);
     return @intCast((x >> 16) & 0xffff);
 }
+
+const style = win32.WS_POPUP;
+
+pub const Style = struct {
+    pub const NoBorder = win32.WINDOW_STYLE{
+        .VISIBLE = 1,
+        .POPUP = 1,
+    };
+
+    pub const Tiled = win32.WS_TILEDWINDOW;
+};
 
 const WIN32_TO_HID: [256]u8 = [256]u8{
     0, 0, 0, 0, 0, 0, 0, 0, 42, 43, 0, 0, 0, 40, 0, 0, // 16
@@ -64,13 +76,8 @@ pub fn Window(comptime UserDataType: type) type {
     return struct {
         const Self = @This();
 
-        name: [*:0]const u8,
-        extent: struct {
-            x: i32,
-            y: i32,
-            width: i32,
-            height: i32,
-        },
+        title: [*:0]const u8,
+        extent: Extent,
         hasFocus: bool = true,
 
         // Win32 specific
@@ -92,27 +99,22 @@ pub fn Window(comptime UserDataType: type) type {
         resizeCallback: ?*const fn (*UserDataType, *Self, Events.ResizeEvent) void = if (@hasDecl(UserDataType, "onWindowResizeEvent")) &UserDataType.onWindowResizeEvent else null,
         focusCallback: ?*const fn (*UserDataType, *Self, Events.FocusEvent) void = if (@hasDecl(UserDataType, "onWindowFocusEvent")) &UserDataType.onWindowFocusEvent else null,
 
-        pub fn init(name: [*:0]const u8, width: i32, height: i32, userdata: *UserDataType) Self {
+        pub fn init(title: [*:0]const u8, extent: Extent, userdata: *UserDataType) Self {
             return .{
-                .name = name,
-                .extent = .{
-                    .x = 0,
-                    .y = 0,
-                    .width = width,
-                    .height = height,
-                },
+                .title = title,
+                .extent = extent,
                 .userdata = userdata,
             };
         }
 
-        pub fn create(self: *Self) void {
+        pub fn create(self: *Self) !void {
             // TODO: Check for error
-            self.hInstance = win32.GetModuleHandleA(null) orelse unreachable;
+            self.hInstance = win32.GetModuleHandleA(null) orelse return error.FailedToRetrieveHINSTANCE;
 
-            var bBrush = win32.GetStockObject(win32.BLACK_BRUSH);
+            const bBrush = win32.GetStockObject(win32.BLACK_BRUSH);
             const wcex = win32.WNDCLASSEXA{
                 .cbSize = @sizeOf(win32.WNDCLASSEXA),
-                .style = win32.WNDCLASS_STYLES.initFlags(.{ .VREDRAW = 1, .HREDRAW = 1 }),
+                .style = .{ .VREDRAW = 1, .HREDRAW = 1 },
                 .lpfnWndProc = wndProc,
                 .cbClsExtra = 0,
                 .cbWndExtra = 0,
@@ -121,15 +123,17 @@ pub fn Window(comptime UserDataType: type) type {
                 .hCursor = null,
                 .hbrBackground = @ptrCast(bBrush),
                 .lpszMenuName = null,
-                .lpszClassName = self.name,
+                .lpszClassName = self.title,
                 .hIconSm = null,
             };
-            _ = win32.RegisterClassExA(&wcex);
+            if (win32.RegisterClassExA(&wcex) == 0) {
+                return error.FailedToRegisterClass;
+            }
             self.hwnd = win32.CreateWindowExA(
-                win32.WINDOW_EX_STYLE.initFlags(.{}),
-                self.name,
-                self.name,
-                win32.WINDOW_STYLE.initFlags(.{ .OVERLAPPED = 1, .CLIPCHILDREN = 1, .CLIPSIBLINGS = 1, .SYSMENU = 1, .VISIBLE = 1 }),
+                .{},
+                self.title,
+                self.title,
+                Style.NoBorder,
                 self.extent.x,
                 self.extent.y,
                 self.extent.width,
@@ -138,9 +142,9 @@ pub fn Window(comptime UserDataType: type) type {
                 null,
                 self.hInstance,
                 null,
-            ) orelse unreachable;
+            ) orelse return error.FailedToCreateWindow;
             _ = win32.ShowWindow(self.hwnd, win32.SW_SHOW);
-            self.dc = win32.GetDC(self.hwnd) orelse unreachable;
+            self.dc = win32.GetDC(self.hwnd) orelse return error.FailedToGetDC;
             return;
         }
 
@@ -268,7 +272,7 @@ pub fn Window(comptime UserDataType: type) type {
 
         pub fn pollEvents(self: *Self) void {
             var msg: win32.MSG = undefined;
-            while (win32.PeekMessageA(&msg, null, 0, 0, win32.PEEK_MESSAGE_REMOVE_TYPE.REMOVE) == 1) {
+            while (win32.PeekMessageA(&msg, null, 0, 0, win32.PM_REMOVE) == 1) {
                 _ = win32.TranslateMessage(&msg);
 
                 self.convertMessage(msg);
@@ -279,6 +283,25 @@ pub fn Window(comptime UserDataType: type) type {
 
         pub fn getProcAddr() *const fn (?[*:0]const u8) callconv(WinApi) ?win32.PROC {
             return win32.wglGetProcAddress;
+        }
+
+        pub fn setTitle(self: *Self, title: [*:0]const u8) bool {
+            if (win32.SetWindowTextA(self.hwnd, title) != 0) {
+                self.title = title;
+                return true;
+            }
+            return false;
+        }
+
+        pub fn setExtent(self: *Self, extent: Extent) bool {
+            if (win32.SetWindowPos(self.hwnd, null, extent.x, extent.y, extent.width, extent.height, .{
+                .SHOWWINDOW = 1,
+                .NOZORDER = 1,
+            }) != 0) {
+                self.extent = extent;
+                return true;
+            }
+            return false;
         }
     };
 }

@@ -9,8 +9,8 @@
     },
     .dependencies = .{
         .zigwin32 = .{
-            .url = "https://github.com/QuentinTessier/zigwin32/archive/refs/tags/Prod.tar.gz",
-            .hash = "1220f8d5028adceac0c6fc8ef554d82efef49ca48913393e9c2f5d73a66b58c8aaad",
+            .url = "https://github.com/marlersoft/zigwin32/archive/4a78e716ae6496f52d9ddaf4fda2c4bb692631cd.tar.gz",
+            .hash = "1220da4cab188b7b0e351de67626ca0dcadceddd16ca5997cfb578697f0525a59dac",
         },
     },
 }

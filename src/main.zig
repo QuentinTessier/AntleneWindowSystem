@@ -14,3 +14,7 @@ pub fn PlatfromWindow(comptime UserDataType: type) type {
         },
     }
 }
+
+pub fn WinWindow(comptime UserDataType: type) type {
+    return @import("Platform/win32.zig").Window(UserDataType);
+}
