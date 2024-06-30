@@ -5,6 +5,8 @@ const WinApi = std.os.windows.WINAPI;
 const Events = @import("../Event.zig");
 const Extent = @import("../Extent.zig");
 
+const gl = @import("win32/gl.zig");
+
 const WM_RESHAPE = win32.WM_USER + 0;
 const WM_ACTIVE = win32.WM_USER + 1;
 
@@ -71,6 +73,20 @@ fn wndProc(hwnd: win32.HWND, msg: c_uint, wParam: win32.WPARAM, lParam: win32.LP
     return 0;
 }
 
+pub const Context = union(enum) {
+    OpenGL: struct {
+        major: i32,
+        minor: i32,
+    },
+    Vulkan: void,
+};
+
+pub const Options = struct {
+    title: [*:0]const u8,
+    extent: Extent,
+    context: Context,
+};
+
 // TODO: Check GetLastError when function fails and returns a error
 pub fn Window(comptime UserDataType: type) type {
     return struct {
@@ -84,6 +100,7 @@ pub fn Window(comptime UserDataType: type) type {
         hInstance: win32.HINSTANCE = undefined,
         hwnd: win32.HWND = undefined,
         dc: win32.HDC = undefined,
+        glrc: win32.HGLRC = undefined,
 
         // Callbacks
         userdata: *UserDataType,
@@ -99,15 +116,19 @@ pub fn Window(comptime UserDataType: type) type {
         resizeCallback: ?*const fn (*UserDataType, *Self, Events.ResizeEvent) void = if (@hasDecl(UserDataType, "onWindowResizeEvent")) &UserDataType.onWindowResizeEvent else null,
         focusCallback: ?*const fn (*UserDataType, *Self, Events.FocusEvent) void = if (@hasDecl(UserDataType, "onWindowFocusEvent")) &UserDataType.onWindowFocusEvent else null,
 
-        pub fn init(title: [*:0]const u8, extent: Extent, userdata: *UserDataType) Self {
-            return .{
-                .title = title,
-                .extent = extent,
+        pub fn create(options: Options, userdata: *UserDataType) !Self {
+            var self = Self{
+                .title = options.title,
+                .extent = options.extent,
                 .userdata = userdata,
             };
+
+            try self.createInternal(options);
+
+            return self;
         }
 
-        pub fn create(self: *Self) !void {
+        fn createInternal(self: *Self, options: Options) !void {
             // TODO: Check for error
             self.hInstance = win32.GetModuleHandleA(null) orelse return error.FailedToRetrieveHINSTANCE;
 
@@ -133,7 +154,7 @@ pub fn Window(comptime UserDataType: type) type {
                 .{},
                 self.title,
                 self.title,
-                Style.NoBorder,
+                Style.Tiled,
                 self.extent.x,
                 self.extent.y,
                 self.extent.width,
@@ -145,7 +166,13 @@ pub fn Window(comptime UserDataType: type) type {
             ) orelse return error.FailedToCreateWindow;
             _ = win32.ShowWindow(self.hwnd, win32.SW_SHOW);
             self.dc = win32.GetDC(self.hwnd) orelse return error.FailedToGetDC;
-            return;
+
+            switch (options.context) {
+                .OpenGL => |version| {
+                    self.glrc = try gl.loadWin32OpenGLContext(self.hInstance, self.dc, version.major, version.minor);
+                },
+                .Vulkan => {},
+            }
         }
 
         fn convertMessage(self: *Self, msg: win32.MSG) void {
@@ -270,6 +297,10 @@ pub fn Window(comptime UserDataType: type) type {
             }
         }
 
+        pub fn swapBuffers(self: *Self) void {
+            _ = win32.SwapBuffers(self.dc);
+        }
+
         pub fn pollEvents(self: *Self) void {
             var msg: win32.MSG = undefined;
             while (win32.PeekMessageA(&msg, null, 0, 0, win32.PM_REMOVE) == 1) {
@@ -283,6 +314,11 @@ pub fn Window(comptime UserDataType: type) type {
 
         pub fn getProcAddr() *const fn (?[*:0]const u8) callconv(WinApi) ?win32.PROC {
             return win32.wglGetProcAddress;
+        }
+
+        pub fn glLoad(_: void, name: [:0]const u8) ?*align(@alignOf(fn (u32) callconv(.C) u32)) const anyopaque {
+            const ptr = win32.wglGetProcAddress(name);
+            return @ptrCast(ptr);
         }
 
         pub fn setTitle(self: *Self, title: [*:0]const u8) bool {
